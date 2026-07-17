@@ -1,48 +1,39 @@
-from datetime import date
-import sqlite3
 # In order to suppress warning related to forward references
 from __future__ import annotations
+from datetime import date
+import sqlite3
 
 
-class Season():
-    year: int
+class Season:
+    season_id: int
     champion_id: str
 
-    def __init__(self, year: int, champion_id: str) -> None:
-        self.year = year
+    def __init__(self, season_id: int, champion_id: str) -> None:
+        self.season_id = season_id
         self.champion_id = champion_id
 
-    def insert_season(self) -> None:
+    def insert_season(self, cursor: sqlite3.Cursor) -> None:
         """Insert the season into seasons table"""
-        # Connect to SQLite database
-        conn = sqlite3.connect('basketball_reference.db')
-        cursor = conn.cursor()
         # Insert data into seasons table
         cursor.execute(
             "INSERT INTO seasons (season_id, champion_id) VALUES (?, ?)",
-            (self.year, self.champion_id, self.mvp_id, self.roty_id))
-        # Commit changes and close connection
-        conn.commit()
-        conn.close()
+            (self.season_id, self.champion_id))
 
 
-class Team():
-    id: str
+class Team:
+    team_id: str
     name: str
     city: str
     state: str
 
-    def __init__(self, id: str, name: str, city: str, state: str):
-        self.id = id
+    def __init__(self, team_id: str, name: str, city: str, state: str) -> None:
+        self.team_id = team_id
         self.name = name
         self.city = city
         self.state = state
 
-    def insert_team(self) -> None:
+    def insert_team(self, cursor: sqlite3.Cursor) -> None:
         """Insert the team into teams table"""
-        # Connect to SQLite database
-        conn = sqlite3.connect('basketball_reference.db')
-        cursor = conn.cursor()
         # Insert data into teams table
         cursor.execute(
             """
@@ -54,14 +45,11 @@ class Team():
             )
             VALUES (?, ?, ?, ?)
             """,
-            (self.id, self.name, self.city, self.state))
-        # Commit changes and close connection
-        conn.commit()
-        conn.close()
+            (self.team_id, self.name, self.city, self.state))
 
 
-class Player():
-    id: str
+class Player:
+    player_id: str
     name: str
     birthdate: date
     height: int
@@ -71,10 +59,10 @@ class Player():
     college: str
     position: list[str]
 
-    def __init__(self, id: str, name: str, birthdate: date, height: int,
+    def __init__(self, player_id: str, name: str, birthdate: date, height: int,
                  weight: int, shoots: str, nationality: str, college: str,
                  position: list[str]) -> None:
-        self.id = id
+        self.player_id = player_id
         self.name = name
         self.birthdate = birthdate
         self.height = height
@@ -84,11 +72,8 @@ class Player():
         self.college = college
         self.position = position
 
-    def insert_player(self) -> None:
+    def insert_player(self, cursor: sqlite3.Cursor) -> None:
         """Insert the player into players table"""
-        # Connect to SQLite database
-        conn = sqlite3.connect('basketball_reference.db')
-        cursor = conn.cursor()
         # Insert data into players table
         cursor.execute(
             """
@@ -104,35 +89,29 @@ class Player():
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (self.id, self.name, self.birthdate.isoformat(), self.height,
+            (self.player_id, self.name, self.birthdate.isoformat(), self.height,
              self.weight, self.shoots, self.nationality, self.college))
         # Insert data into player-position table
         for position in self.position:
             cursor.execute(
-                "INSERT INTO player_position (id, position) VALUES (?, ?)",
-                (self.id, position))
-        # Commit changes and close connection
-        conn.commit()
-        conn.close()
+                "INSERT INTO player_position (player_id, position) VALUES (?, ?)",
+                (self.player_id, position))
 
 
-class Coach():
-    id: str
+class Coach:
+    coach_id: str
     name: str
     birthdate: date
     nationality: str
 
-    def __init__(self, id: str, name: str, birthdate: date, nationality: str) -> None:
-        self.id = id
+    def __init__(self, coach_id: str, name: str, birthdate: date, nationality: str) -> None:
+        self.coach_id = coach_id
         self.name = name
         self.birthdate = birthdate
         self.nationality = nationality
 
-    def insert_coach(self) -> None:
+    def insert_coach(self, cursor: sqlite3.Cursor) -> None:
         """Insert the coach into coaches table"""
-        # Connect to SQLite database
-        conn = sqlite3.connect('basketball_reference.db')
-        cursor = conn.cursor()
         # Insert data into coaches table
         cursor.execute(
             """
@@ -144,30 +123,23 @@ class Coach():
             )
             VALUES (?, ?, ?, ?)
             """,
-            (self.id, self.name, self.birthdate.isoformat(), self.height,
-             self.nationality))
-        # Commit changes and close connection
-        conn.commit()
-        conn.close()
+            (self.coach_id, self.name, self.birthdate.isoformat(), self.nationality))
 
 
-class Award():
-    id: str
+class Award:
+    award_id: str
     name: str
-    season: int
+    season_id: int
     winner_id: str
 
-    def __init__(self, id: str, name: str, season: int, winner_id: str) -> None:
-        self.id = id
+    def __init__(self, award_id: str, name: str, season_id: int, winner_id: str) -> None:
+        self.award_id = award_id
         self.name = name
-        self.season = season
+        self.season_id = season_id
         self.winner_id = winner_id
 
-    def insert_award(self) -> None:
+    def insert_award(self, cursor: sqlite3.Cursor) -> None:
         """Insert the award into awards table"""
-        # Connect to SQLite database
-        conn = sqlite3.connect('basketball_reference.db')
-        cursor = conn.cursor()
         # Insert data into awards table
         cursor.execute(
             """
@@ -179,8 +151,125 @@ class Award():
             )
             VALUES (?, ?, ?, ?)
             """,
-            (self.id, self.name, self.season, self.winner_id))
-        # Commit changes and close connection
-        conn.commit()
-        conn.close()
+            (self.award_id, self.name, self.season_id, self.winner_id))
         
+
+class PlayerStats:
+    season_id: int
+    player_id: str
+    team_id: str
+    g: int
+    gs: int
+    mp: int
+    fg: int
+    fga: int
+    fg_pct: float
+    three_p: int
+    three_pa: int
+    three_p_pct: float
+    two_p: int
+    two_pa: int
+    two_p_pct: float
+    efg_pct: float
+    ft: int
+    fta: int
+    ft_pct: float
+    orb: int
+    drb: int
+    trb: int
+    ast: int
+    stl: int
+    blk: int
+    tov: int
+    pf: int
+    pts: int
+    trp_dbl: int
+    ws: float
+    xp: int
+
+    def __init__(self, season_id: int, player_id: str, team_id: str, g: int, gs: int,
+                 mp: int, fg: int, fga: int, fg_pct: float, three_p: int, three_pa: int,
+                 three_p_pct: float, two_p: int, two_pa: int, two_p_pct: float,
+                 efg_pct: float, ft: int, fta: int, ft_pct: float, orb: int, drb: int,
+                 trb: int, ast: int, stl: int, blk: int, tov: int, pf: int, pts: int,
+                 trp_dbl: int, ws: float, xp: str) -> None:
+        self.season_id = season_id
+        self.player_id = player_id
+        self.team_id = team_id
+        self.g = g
+        self.gs = gs
+        self.mp = mp
+        self.fg = fg
+        self.fga = fga
+        self.fg_pct = fg_pct
+        self.three_p = three_p
+        self.three_pa = three_pa
+        self.three_p_pct = three_p_pct
+        self.two_p = two_p
+        self.two_pa = two_pa
+        self.two_p_pct = two_p_pct
+        self.efg_pct = efg_pct
+        self.ft = ft
+        self.fta = fta
+        self.ft_pct = ft_pct
+        self.orb = orb
+        self.drb = drb
+        self.trb = trb
+        self.ast = ast
+        self.stl = stl
+        self.blk = blk
+        self.tov = tov
+        self.pf = pf
+        self.pts = pts
+        self.trp_dbl = trp_dbl
+        self.ws = ws
+        self.xp = 0 if xp == 'R' else int(xp)
+
+    def insert_player_stats(self, cursor: sqlite3.Cursor) -> None:
+        """Insert the player stats into player_stats table"""
+        # Insert data into player_stats table
+        cursor.execute(
+            """
+            INSERT INTO player_stats (
+                season_id,
+                player_id,
+                team_id,
+                games,
+                games_started,
+                minutes_played,
+                field_goals,
+                field_goal_attempts,
+                field_goal_percentage,
+                three_point_field_goals,
+                three_point_field_goal_attempts,
+                three_point_field_goal_percentage,
+                two_point_field_goals,
+                two_point_field_goal_attempts,
+                two_point_field_goal_percentage,
+                effective_field_goal_percentage,
+                free_throws,
+                free_throw_attempts,
+                free_throw_percentage,
+                offensive_rebounds,
+                defensive_rebounds,
+                total_rebounds,
+                assists,
+                steals,
+                blocks,
+                turnovers,
+                personal_fouls,
+                points,
+                triple_doubles,
+                win_shares,
+                experience
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (self.season_id, self.player_id, self.team_id, self.g, self.gs, self.mp,
+             self.fg, self.fga, self.fg_pct, self.three_p, self.three_pa,
+             self.three_p_pct, self.two_p, self.two_pa, self.two_p_pct,
+             self.efg_pct, self.ft, self.fta, self.ft_pct, self.orb, self.drb,
+             self.trb, self.ast, self.stl, self.blk, self.tov, self.pf, self.pts,
+             self.trp_dbl, self.ws, self.xp))
