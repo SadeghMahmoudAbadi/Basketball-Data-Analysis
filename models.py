@@ -129,30 +129,36 @@ class Coach:
 class Award:
     award_id: str
     name: str
-    season_id: int
-    winner_id: str
 
-    def __init__(self, award_id: str, name: str, season_id: int, winner_id: str) -> None:
+    def __init__(self, award_id: str, name: str) -> None:
         self.award_id = award_id
         self.name = name
-        self.season_id = season_id
-        self.winner_id = winner_id
 
     def insert_award(self, cursor: sqlite3.Cursor) -> None:
         """Insert the award into awards table"""
         # Insert data into awards table
         cursor.execute(
-            """
-            INSERT INTO awards (
-                award_id,
-                name,
-                season_id,
-                player_id
-            )
-            VALUES (?, ?, ?, ?)
-            """,
-            (self.award_id, self.name, self.season_id, self.winner_id))
+            "INSERT INTO awards (award_id, name) VALUES (?, ?)",
+            (self.award_id, self.name))
         
+
+class AwardSeason:
+    season_id: int
+    award_id: str
+    player_id: str
+
+    def __init__(self, season_id: int, award_id: str, player_id: str) -> None:
+        self.season_id = season_id
+        self.award_id = award_id
+        self.player_id = player_id
+
+    def insert_award_season(self, cursor: sqlite3.Cursor) -> None:
+        """Insert the award into award_season table"""
+        # Insert data into award_season table
+        cursor.execute(
+            "INSERT INTO award_season (season_id, award_id, player_id) VALUES (?, ?, ?)",
+            (self.season_id, self.award_id, self.player_id))
+               
 
 class PlayerStats:
     season_id: int
@@ -239,17 +245,17 @@ class PlayerStats:
                 minutes_played,
                 field_goals,
                 field_goal_attempts,
-                field_goal_percentage,
+                field_goal_percent,
                 three_point_field_goals,
                 three_point_field_goal_attempts,
-                three_point_field_goal_percentage,
+                three_point_field_goal_percent,
                 two_point_field_goals,
                 two_point_field_goal_attempts,
-                two_point_field_goal_percentage,
-                effective_field_goal_percentage,
+                two_point_field_goal_percent,
+                effective_field_goal_percent,
                 free_throws,
                 free_throw_attempts,
-                free_throw_percentage,
+                free_throw_percent,
                 offensive_rebounds,
                 defensive_rebounds,
                 total_rebounds,
@@ -273,3 +279,88 @@ class PlayerStats:
              self.efg_pct, self.ft, self.fta, self.ft_pct, self.orb, self.drb,
              self.trb, self.ast, self.stl, self.blk, self.tov, self.pf, self.pts,
              self.trp_dbl, self.ws, self.xp))
+        
+
+class TeamStats:
+    season_id: int
+    team_id: str
+    wins: int
+    losses: int
+    wl_pct: float
+    finish_rank: int
+    playoff_result: str
+    ortg: float
+    drtg: float
+    nrtg: float
+    pace: float
+
+    def __init__(self, season_id: int, team_id: str, wins: int, losses: int,
+                 wl_pct: float, finish_rank: int, playoff_result: str,
+                 ortg: float, drtg: float, nrtg: float, pace: float) -> None:
+        self.season_id = season_id
+        self.team_id = team_id
+        self.wins = wins
+        self.losses = losses
+        self.wl_pct = wl_pct
+        self.finish_rank = finish_rank
+        self.playoff_result = playoff_result
+        self.ortg = ortg
+        self.drtg = drtg
+        self.nrtg = nrtg
+        self.pace = pace
+
+    def insert_team_stats(self, cursor: sqlite3.Cursor) -> None:
+        """Insert the team stats into team_stats table"""
+        # Insert data into team_stats table
+        cursor.execute(
+            """
+            INSERT INTO team_stats (
+                season_id,
+                team_id,
+                wins,
+                losses,
+                win_loss_percent,
+                finish_rank,
+                playoff_result,
+                offensive_rating,
+                defensive_rating,
+                net_rating,
+                pace
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (self.season_id, self.team_id, self.wins, self.losses, self.wl_pct, 
+             self.finish_rank, self.playoff_result, self.ortg, self.drtg,
+             self.nrtg, self.pace))
+        
+
+class CoachStats:
+    season_id: int
+    coach_id: str
+    team_id: str
+    wins: int
+    losses: int
+
+    def __init__(self, season_id: int, coach_id: str, team_id: str, wins: int,
+                 losses: int) -> None:
+        self.season_id = season_id
+        self.coach_id = coach_id
+        self.team_id = team_id
+        self.wins = wins
+        self.losses = losses
+
+    def insert_coach_stats(self, cursor: sqlite3.Cursor) -> None:
+        """Insert the coach stats into coach_stats table"""
+        # Insert data into coach_stats table
+        cursor.execute(
+            """
+            INSERT INTO coach_stats (
+                season_id,
+                coach_id,
+                team_id,
+                wins_under_coach,
+                losses_under_coach    
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (self.season_id, self.coach_id, self.team_id, self.wins, self.losses))
