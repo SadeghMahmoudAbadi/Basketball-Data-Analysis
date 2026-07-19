@@ -16,21 +16,28 @@ BROWSER_CONFIGS = {
 def log(message):
     print(f"[Players Scraper] {message}", flush=True)
 
-def parse_height_to_inches(height_str: str) -> int:
+def parse_height_to_cm(height_str: str) -> int:
+    """تبدیل فرمت فوت-اینچ (مثل 6-7) به سانتی‌متر و گرد کردن آن"""
     try:
         match = re.search(r"(\d+)-(\d+)", height_str)
         if match:
             ft, inches = map(int, match.groups())
-            return (ft * 12) + inches
+            total_inches = (ft * 12) + inches
+            return round(total_inches * 2.54)
     except:
         pass
     return 0
 
-def to_int(val: str, default: int = 0) -> int:
-    if not val:
-        return default
-    clean = val.strip().replace(",", "")
-    return int(clean) if clean.isdigit() or (clean.startswith('-') and clean[1:].isdigit()) else default
+def parse_weight_to_kg(weight_str: str) -> int:
+    """تبدیل پوند به کیلوگرم و گرد کردن آن"""
+    try:
+        clean = weight_str.lower().replace("lb", "").strip().replace(",", "")
+        if clean.isdigit():
+            pounds = int(clean)
+            return round(pounds * 0.453592)
+    except:
+        pass
+    return 0
 
 async def scrape_player_profile(page, href: str):
     try:
@@ -62,10 +69,11 @@ async def scrape_player_profile(page, href: str):
         span_count = await spans.count()
         for i in range(span_count):
             txt = await spans.nth(i).inner_text()
-            if re.match(r"^\d+-\d+$", txt.strip()):
-                height = parse_height_to_inches(txt.strip())
-            elif "lb" in txt:
-                weight = to_int(txt.replace("lb", ""))
+            txt_clean = txt.strip()
+            if re.match(r"^\d+-\d+$", txt_clean):
+                height = parse_height_to_cm(txt_clean)
+            elif "lb" in txt_clean:
+                weight = parse_weight_to_kg(txt_clean)
 
         nationality = "US"
         nat_link = meta.locator("a[href*='/friv/birthplaces.fcgi']")
@@ -98,8 +106,8 @@ async def scrape_player_profile(page, href: str):
             "player_id": player_id,
             "name": name,
             "birthdate": birthdate if birthdate else date(1990, 1, 1),
-            "height": height,
-            "weight": weight,
+            "height_cm": height,
+            "weight_kg": weight,
             "shoots": shoots,
             "nationality": nationality,
             "college": college,
@@ -124,7 +132,6 @@ async def scrape_multi_season_players(start_year: int, end_year: int):
             
             season_url = f"{BASE_URL}/leagues/NBA_{season_year}.html"
             try:
-
                 await page.goto(season_url, wait_until="commit", timeout=60000)
                 await page.wait_for_timeout(3000)
                 
@@ -133,17 +140,25 @@ async def scrape_multi_season_players(start_year: int, end_year: int):
                 
                 team_hrefs = set()
                 
-                comments = soup.find_all(string=lambda text: isinstance(text, Comment))
-                for comment in comments:
-                    if 'table' in comment and ('teams' in comment or 'team' in comment):
-                        comment_soup = BeautifulSoup(comment, 'html.parser')
-                        # پیدا کردن همه لینک‌های تیم‌ها بر اساس ساختار ادرس دهی سایت
-                        links = comment_soup.find_all('a', href=re.compile(r'/teams/[A-Z]{3}/\d{4}\.html'))
-                        for link in links:
-                            team_hrefs.add(link.get('href'))
-                
+                confs_div = soup.find('div', id='all_confs_standings')
+                if confs_div:
+                    season_pattern = re.compile(rf'/teams/[A-Z]{{3}}/{season_year}\.html')
+                    
+                    comments = confs_div.find_all(string=lambda text: isinstance(text, Comment))
+                    for comment in comments:
+                        if 'table' in comment:
+                            comment_soup = BeautifulSoup(comment, 'html.parser')
+                            links = comment_soup.find_all('a', href=season_pattern)
+                            for link in links:
+                                team_hrefs.add(link.get('href'))
+                                
+                    links = confs_div.find_all('a', href=season_pattern)
+                    for link in links:
+                        team_hrefs.add(link.get('href'))
+
                 if not team_hrefs:
-                    links = soup.find_all('a', href=re.compile(r'/teams/[A-Z]{3}/\d{4}\.html'))
+                    season_pattern = re.compile(rf'/teams/[A-Z]{{3}}/{season_year}\.html')
+                    links = soup.find_all('a', href=season_pattern)
                     for link in links:
                         team_hrefs.add(link.get('href'))
 
@@ -151,7 +166,7 @@ async def scrape_multi_season_players(start_year: int, end_year: int):
                 log(f"تعداد {len(team_hrefs)} تیم در فصل {season_year} پیدا شد.")
                 
                 if len(team_hrefs) == 0:
-                     log(" محتوای صفحه تیم‌ها لود نشد.")
+                     log("محتوای صفحه تیم‌ها لود نشد.")
                      continue
 
                 for t_idx, team_href in enumerate(team_hrefs, 1):
@@ -176,13 +191,13 @@ async def scrape_multi_season_players(start_year: int, end_year: int):
                             if p_id in processed_players:
                                 continue
                                 
-                            log(f"   [{p_idx}/{len(player_hrefs)}] استخراج مشخصات: {p_id}")
+                            log(f"   [{p_idx}/{len(player_hrefs)}] استخراج مشخصات متری: {p_id}")
                             profile = await scrape_player_profile(page, p_href)
                             
                             if profile:
                                 all_players_data.append(profile)
                                 processed_players.add(p_id)
-                                log(f"   موفق: {profile['name']} ثبت شد.")
+                                log(f"   موفق: {profile['name']} ({profile['height_cm']}cm, {profile['weight_kg']}kg) ثبت شد.")
                             
                             await asyncio.sleep(2)
                             
@@ -195,7 +210,8 @@ async def scrape_multi_season_players(start_year: int, end_year: int):
         await context.close()
         await browser.close()
         
-        print("\n" + "="*20 + f" پایان کل فرآیند: {len(all_players_data)} بازیکن منحصربه‌فرد ثبت شدند " + "="*20)
+        print("\n" + "="*20 + f" پایان کل فرآیند: {len(all_players_data)} بازیکن ثبت شدند " + "="*20)
+        return all_players_data
 
 if __name__ == "__main__":
     asyncio.run(scrape_multi_season_players(2019, 2024))
