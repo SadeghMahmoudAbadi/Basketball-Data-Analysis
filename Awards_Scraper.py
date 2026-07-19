@@ -68,15 +68,15 @@ async def scrape_nba_awards_data(start_year: int, end_year: int) -> tuple[list[A
         return (awards_list, award_seasons_list)
 
 def insert_data(awards: list[Award], award_season_list: list[AwardSeason]) -> None:
-    """Insert coaches and coach_stats into database"""
+    """Insert awards and awards season into database"""
     try:
         # Connect to SQLite database
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
-        # Insert coaches into database
+        # Insert awards into database
         for award in awards:
             award.insert_award(cursor)
-        # Insert coach_stats into database
+        # Insert awards season into database
         for award_season in award_season_list:
             award_season.insert_award_season(cursor)
         # Commit changes and close connection

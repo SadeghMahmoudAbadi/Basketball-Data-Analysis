@@ -4,6 +4,9 @@ from datetime import date
 import sqlite3
 
 
+DATABASE = "basketball_reference.db"
+
+
 class Season:
     season_id: int
     champion_id: str
@@ -37,7 +40,7 @@ class Team:
         # Insert data into teams table
         cursor.execute(
             """
-            INSERT INTO teams (
+            INSERT OR IGNORE INTO teams (
                 team_id,
                 name,
                 city,
@@ -46,12 +49,25 @@ class Team:
             VALUES (?, ?, ?, ?)
             """,
             (self.team_id, self.name, self.city, self.state))
+        
+    @staticmethod        
+    def get_team_ids() -> set[str]:
+        """Get all team ids in database"""
+        # Connect to SQLite database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT team_id
+            FROM teams
+        """)
+        team_ids = set([row[0] for row in cursor.fetchall()])
+        return team_ids
 
 
 class Player:
     player_id: str
     name: str
-    birthdate: date
+    birthdate: str
     height: int
     weight: int
     shoots: str
@@ -59,7 +75,7 @@ class Player:
     college: str
     position: list[str]
 
-    def __init__(self, player_id: str, name: str, birthdate: date, height: int,
+    def __init__(self, player_id: str, name: str, birthdate: str, height: int,
                  weight: int, shoots: str, nationality: str, college: str,
                  position: list[str]) -> None:
         self.player_id = player_id
@@ -77,7 +93,7 @@ class Player:
         # Insert data into players table
         cursor.execute(
             """
-            INSERT INTO players (
+            INSERT OR IGNORE INTO players (
                 player_id,
                 name,
                 birthdate,
@@ -89,13 +105,26 @@ class Player:
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (self.player_id, self.name, self.birthdate.isoformat(), self.height,
+            (self.player_id, self.name, self.birthdate, self.height,
              self.weight, self.shoots, self.nationality, self.college))
         # Insert data into player-position table
         for position in self.position:
             cursor.execute(
                 "INSERT INTO player_position (player_id, position) VALUES (?, ?)",
                 (self.player_id, position))
+
+    @staticmethod        
+    def get_player_ids() -> set[str]:
+        """Get all player ids in database"""
+        # Connect to SQLite database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT player_id
+            FROM players
+        """)
+        player_ids = set([row[0] for row in cursor.fetchall()])
+        return player_ids
 
 
 class Coach:
@@ -115,7 +144,7 @@ class Coach:
         # Insert data into coaches table
         cursor.execute(
             """
-            INSERT INTO coaches (
+            INSERT OR IGNORE INTO coaches (
                 coach_id,
                 name,
                 birthdate,
@@ -124,6 +153,19 @@ class Coach:
             VALUES (?, ?, ?, ?)
             """,
             (self.coach_id, self.name, self.birthdate, self.nationality))
+        
+    @staticmethod        
+    def get_coach_ids() -> set[str]:
+        """Get all coach ids in database"""
+        # Connect to SQLite database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT coach_id
+            FROM coaches
+        """)
+        coach_ids = set([row[0] for row in cursor.fetchall()])
+        return coach_ids
 
 
 class Award:
@@ -138,7 +180,7 @@ class Award:
         """Insert the award into awards table"""
         # Insert data into awards table
         cursor.execute(
-            "INSERT INTO awards (award_id, name) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO awards (award_id, name) VALUES (?, ?)",
             (self.award_id, self.name))
         
 
@@ -156,7 +198,7 @@ class AwardSeason:
         """Insert the award into award_season table"""
         # Insert data into award_season table
         cursor.execute(
-            "INSERT INTO award_season (season_id, award_id, player_id) VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO award_season (season_id, award_id, player_id) VALUES (?, ?, ?)",
             (self.season_id, self.award_id, self.player_id))
                
 
@@ -236,7 +278,7 @@ class PlayerStats:
         # Insert data into player_stats table
         cursor.execute(
             """
-            INSERT INTO player_stats (
+            INSERT OR IGNORE INTO player_stats (
                 season_id,
                 player_id,
                 team_id,
@@ -314,7 +356,7 @@ class TeamStats:
         # Insert data into team_stats table
         cursor.execute(
             """
-            INSERT INTO team_stats (
+            INSERT OR IGNORE INTO team_stats (
                 season_id,
                 team_id,
                 wins,
@@ -354,7 +396,7 @@ class CoachStats:
         # Insert data into coach_stats table
         cursor.execute(
             """
-            INSERT INTO coach_stats (
+            INSERT OR IGNORE INTO coach_stats (
                 season_id,
                 coach_id,
                 team_id,

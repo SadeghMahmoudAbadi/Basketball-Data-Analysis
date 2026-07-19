@@ -3,6 +3,8 @@ import re
 from datetime import datetime, date
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup, Comment
+from models import Player, Team
+import sqlite3
 
 BASE_URL = "https://www.basketball-reference.com"
 
@@ -29,15 +31,17 @@ TEAM_STATES = {
     "TOR": "Ontario", "UTA": "Utah", "WAS": "Washington D.C."
 }
 
-def log(message):
+DATABASE = "basketball_reference.db"
+
+def log(message) -> None:
     print(f"[Players & Teams Scraper] {message}", flush=True)
 
-def parse_team_name(full_name: str):
+def parse_team_name(full_name: str) -> tuple[str, str]:
     for city in MULTI_WORD_CITIES:
         if full_name.startswith(city):
             return city, full_name[len(city):].strip()
     parts = full_name.split()
-    return parts[0], " ".join(parts[1:]) if len(parts) > 1 else full_name
+    return (parts[0], " ".join(parts[1:]) if len(parts) > 1 else full_name)
 
 def parse_height_to_cm(height_str: str) -> int:
     try:
@@ -46,7 +50,8 @@ def parse_height_to_cm(height_str: str) -> int:
             ft, inches = map(int, match.groups())
             total_inches = (ft * 12) + inches
             return round(total_inches * 2.54)
-    except: pass
+    except Exception as e:
+        log(e)
     return 0
 
 def parse_weight_to_kg(weight_str: str) -> int:
@@ -54,10 +59,11 @@ def parse_weight_to_kg(weight_str: str) -> int:
         clean = weight_str.lower().replace("lb", "").strip().replace(",", "")
         if clean.isdigit():
             return round(int(clean) * 0.453592)
-    except: pass
+    except Exception as e:
+        log(e)
     return 0
 
-async def scrape_player_profile(page, href: str):
+async def scrape_player_profile(page, href: str) -> Player:
     try:
         await page.goto(f"{BASE_URL}{href}", wait_until="domcontentloaded", timeout=60000)
         meta = page.locator("#meta")
@@ -73,7 +79,8 @@ async def scrape_player_profile(page, href: str):
             birth_data = await birth_span.get_attribute("data-birth")
             if birth_data:
                 try: birthdate = datetime.strptime(birth_data.strip(), "%Y-%m-%d").date()
-                except: pass
+                except Exception as e:
+                    log(e)
         
         height, weight = 0, 0
         meta_text = await meta.inner_text()
@@ -100,26 +107,23 @@ async def scrape_player_profile(page, href: str):
         pos_match = re.search(r"Position:\s*([^\n]+)", meta_text)
         if pos_match:
             pos_text = pos_match.group(1)
-            for pos in ["Guard", "Forward", "Center", "Point Guard", "Shooting Guard", "Small Forward", "Power Forward"]:
+            for pos in ["Point Guard", "Shooting Guard", "Small Forward", "Power Forward", "Guard", "Forward", "Center"]:
                 if pos in pos_text and pos not in position: position.append(pos)
         if not position: position = ["Forward"]
 
-        return {
-            "player_id": href.split("/")[-1].replace(".html", ""),
-            "name": name,
-            "birthdate": birthdate,
-            "height_cm": height if height > 0 else None,
-            "weight_kg": weight if weight > 0 else None,
-            "shoots": shoots,
-            "nationality": nationality,
-            "college": college if college != "N/A" else None,
-            "position": position
-        }
+        player_id = href.split("/")[-1].replace(".html", "")
+        birthdate = birthdate.strftime("%Y-%m-%d") if birthdate else "1970-01-01"
+        height_cm = height if height > 0 else None
+        weight_kg = weight if weight > 0 else None
+        # Create and return player object
+        player = Player(player_id, name, birthdate, height_cm, weight_kg, shoots,
+                        nationality, college, position)
+        return player
     except Exception as e:
         log(f"خطا در پروفایل بازیکن {href}: {e}")
     return None
 
-async def scrape_multi_season_data(start_year: int, end_year: int):
+async def scrape_multi_season_data(start_year: int, end_year: int) -> tuple[list[Player], list[Team]]:
     log("در حال راه‌اندازی مرورگر...")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, channel='chrome')
@@ -128,21 +132,21 @@ async def scrape_multi_season_data(start_year: int, end_year: int):
         
         all_players_data = []
         all_teams_data = []
-        processed_players = set()
-        processed_teams = set()
+        processed_players = Player.get_player_ids()
+        processed_teams = Team.get_team_ids()
         
         for season_year in range(start_year, end_year + 1):
             log(f"\n=شروع استخراج فصل {season_year} =")
             season_url = f"{BASE_URL}/leagues/NBA_{season_year}.html"
             
             try:
-                await page.goto(season_url, wait_until="commit", timeout=60000)
+                await page.goto(season_url, wait_until="domcontentloaded", timeout=60000)
                 await page.wait_for_timeout(3000)
                 
                 content = await page.content()
                 soup = BeautifulSoup(content, 'html.parser')
                 
-                confs_div = soup.find('div', id='all_confs_standings')
+                confs_div = soup.find('div', id='all_standings')
                 if confs_div:
                     for comment in confs_div.find_all(string=lambda text: isinstance(text, Comment)):
                         if 'table' in comment:
@@ -152,24 +156,22 @@ async def scrape_multi_season_data(start_year: int, end_year: int):
                                 if t_code not in processed_teams:
                                     processed_teams.add(t_code)
                                     city, t_name = parse_team_name(a.text.strip())
-                                    all_teams_data.append({
-                                        "team_id": t_code, 
-                                        "name": t_name, 
-                                        "city": city,
-                                        "state": TEAM_STATES.get(t_code, "N/A")
-                                    })
+                                    state = TEAM_STATES.get(t_code, "N/A")
+                                    # Create and append team object
+                                    team = Team(t_code, t_name, city, state)
+                                    all_teams_data.append(team)
+                                    log(f"   موفق: تیم {team.name} ثبت شد.")
                                     
                     for a in confs_div.find_all('a', href=re.compile(rf'/teams/[A-Z]{{3}}/{season_year}\.html')):
                         t_code = a.get('href').split('/')[-2]
                         if t_code not in processed_teams:
                             processed_teams.add(t_code)
                             city, t_name = parse_team_name(a.text.strip())
-                            all_teams_data.append({
-                                "team_id": t_code, 
-                                "name": t_name, 
-                                "city": city,
-                                "state": TEAM_STATES.get(t_code, "N/A")
-                            })
+                            state = TEAM_STATES.get(t_code, "N/A")
+                            # Create and append team object
+                            team = Team(t_code, t_name, city, state)
+                            all_teams_data.append(team)
+                            log(f"   موفق: تیم {team.name} ثبت شد.")
 
                 team_hrefs = set()
                 season_pattern = re.compile(rf'/teams/[A-Z]{{3}}/{season_year}\.html')
@@ -209,7 +211,7 @@ async def scrape_multi_season_data(start_year: int, end_year: int):
                             if profile:
                                 all_players_data.append(profile)
                                 processed_players.add(p_id)
-                                log(f"   موفق: {profile['name']} ثبت شد.")
+                                log(f"   موفق: بازیکن {profile.name} ثبت شد.")
                             await asyncio.sleep(2)
                     except Exception as e:
                         log(f"خطا در تیم {team_code}: {e}")
@@ -222,12 +224,33 @@ async def scrape_multi_season_data(start_year: int, end_year: int):
         log(f"\n==================== پایان عملیات استخراج ====================")
         log(f"تعداد کل تیم‌های منحصربه‌فرد ثبت شده: {len(all_teams_data)}")
         log(f"تعداد کل بازیکنان منحصربه‌فرد ثبت شده: {len(all_players_data)}")
-        return all_players_data, all_teams_data
+        return (all_players_data, all_teams_data)
+
+def insert_data(players: list[Player], teams: list[Team]) -> None:
+    """Insert players and teams into database"""
+    try:
+        # Connect to SQLite database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        # Insert players into database
+        for player in players:
+            player.insert_player(cursor)
+        # Insert teams into database
+        for team in teams:
+            team.insert_team(cursor)
+        # Commit changes and close connection
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log(f"خطا در وارد کردن دیتا به دیتابیس: {e}")
 
 async def main():
     players, teams = await scrape_multi_season_data(2019, 2024)
+    insert_data(players, teams)
+    if players:
+        print(f"نمونه ساختار بازیکن : {players[0]}")
     if teams:
-        print(f"نمونه ساختار تیم : {teams[0]}")
+        print(f"نمونه ساختار تیم     : {teams[0]}")
 
 if __name__ == "__main__":
     asyncio.run(main())

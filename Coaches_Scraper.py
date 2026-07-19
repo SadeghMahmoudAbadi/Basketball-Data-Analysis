@@ -92,7 +92,7 @@ async def scrape_coaches_data() -> tuple[list[Coach], list[CoachStats]]:
         seasons = get_target_seasons()
         coaches_stats = []
         all_coach_hrefs = set()
-        seen_coaches = set()
+        seen_coaches = Coach.get_coach_ids()
         coaches_profiles = []
         
         for s in seasons:
