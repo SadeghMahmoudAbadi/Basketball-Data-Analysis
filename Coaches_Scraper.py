@@ -3,6 +3,8 @@ import re
 from urllib.parse import urljoin
 from datetime import datetime, date
 from playwright.async_api import async_playwright
+from models import Coach, CoachStats
+import sqlite3
 
 BASE_URL = "https://www.basketball-reference.com"
 
@@ -13,7 +15,9 @@ BROWSER_CONFIGS = {
     "extra_http_headers": {"Accept-Language": "en-US,en;q=0.9"}
 }
 
-def log(message):
+DATABASE = "basketball_reference.db"
+
+def log(message) -> None:
     print(f"[Coaches Scraper] {message}", flush=True)
 
 def convert_to_date_object(date_text: str) -> date:
@@ -23,7 +27,7 @@ def convert_to_date_object(date_text: str) -> date:
     except:
         return None
 
-def get_target_seasons():
+def get_target_seasons() -> list[dict]:
     target_years = {
         "2019-20": 2020,
         "2020-21": 2021,
@@ -33,7 +37,7 @@ def get_target_seasons():
     }
     return [{"season": name, "url": f"{BASE_URL}/leagues/NBA_{year}.html"} for name, year in target_years.items()]
 
-async def get_teams_of_season(page, season_url):
+async def get_teams_of_season(page, season_url) -> list[dict]:
     await page.goto(season_url, wait_until="domcontentloaded")
     team_links_locator = page.locator('th[data-stat="team_name"] a')
     teams = []
@@ -51,7 +55,7 @@ async def get_teams_of_season(page, season_url):
                 teams.append({"team_code": team_code, "url": urljoin(BASE_URL, href)})
     return teams
 
-async def scrape_coach_profile(page, href: str):
+async def scrape_coach_profile(page, href: str) -> Coach:
     try:
         await page.goto(f"{BASE_URL}{href}", wait_until="domcontentloaded", timeout=30000)
         meta = page.locator("#meta")
@@ -69,17 +73,16 @@ async def scrape_coach_profile(page, href: str):
             nat_match = re.search(r"Born:\s*[A-Za-z]+\s+\d+,\s+\d{4}\s+in\s+([A-Za-z\s,]+)", meta_text)
             if nat_match: nationality = nat_match.group(1).split(",")[-1].strip()
 
-        return {
-            "coach_id": href.split("/")[-1].replace(".html", ""),
-            "name": name,
-            "birthdate": birthdate.strftime("%Y-%m-%d") if birthdate else "1970-01-01",
-            "nationality": nationality
-        }
+        coach_id = href.split("/")[-1].replace(".html", "")
+        birthdate = birthdate.strftime("%Y-%m-%d") if birthdate else "1970-01-01"
+        # Create and return coach object
+        coach = Coach(coach_id, name, birthdate, nationality)
+        return coach
     except Exception as e:
         log(f"خطا در بررسی پروفایل مربی {href}: {e}")
     return None
 
-async def scrape_coaches_data():
+async def scrape_coaches_data() -> tuple[list[Coach], list[CoachStats]]:
     log("در حال راه‌اندازی مرورگر...")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, channel='chrome')
@@ -121,14 +124,9 @@ async def scrape_coaches_data():
                                 if record_match:
                                     wins = int(record_match.group(1))
                                     losses = int(record_match.group(2))
-                                
-                                coaches_stats.append({
-                                    "season_id": current_season,
-                                    "coach_id": coach_id,
-                                    "team_id": t["team_code"],
-                                    "wins": wins,
-                                    "losses": losses
-                                })
+                                # Create and append coach_stat object
+                                coach_stat = CoachStats(current_season, coach_id, t["team_code"], wins, losses)
+                                coaches_stats.append(coach_stat)
                 except Exception as e:
                     log(f"خطا در اسکن مربی تیم {t['team_code']}: {e}")
                 
@@ -148,11 +146,29 @@ async def scrape_coaches_data():
         await context.close()
         await browser.close()
 
-        return coaches_profiles, coaches_stats
+        return (coaches_profiles, coaches_stats)
+    
+def insert_data(coaches: list[Coach], coach_stats: list[CoachStats]) -> None:
+    """Insert coaches and coach_stats into database"""
+    try:
+        # Connect to SQLite database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        # Insert coaches into database
+        for coach in coaches:
+            coach.insert_coach(cursor)
+        # Insert coach_stats into database
+        for stats in coach_stats:
+            stats.insert_coach_stats(cursor)
+        # Commit changes and close connection
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log(f"خطا در وارد کردن دیتا به دیتابیس: {e}")
 
 async def main():
     coaches_profiles, coaches_stats = await scrape_coaches_data()
-    
+    insert_data(coaches_profiles, coaches_stats)
     print("\n========== گزارش نهایی دیتای مربیان ==========")
     print(f"۱. تعداد کل پروفایل مربیان (تیبل ۱): {len(coaches_profiles)}")
     print(f"۲. تعداد رکورد آمار فصلی مربیان (تیبل ۲): {len(coaches_stats)}")

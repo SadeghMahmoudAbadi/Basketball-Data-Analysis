@@ -101,10 +101,10 @@ class Player:
 class Coach:
     coach_id: str
     name: str
-    birthdate: date
+    birthdate: str
     nationality: str
 
-    def __init__(self, coach_id: str, name: str, birthdate: date, nationality: str) -> None:
+    def __init__(self, coach_id: str, name: str, birthdate: str, nationality: str) -> None:
         self.coach_id = coach_id
         self.name = name
         self.birthdate = birthdate
@@ -123,7 +123,7 @@ class Coach:
             )
             VALUES (?, ?, ?, ?)
             """,
-            (self.coach_id, self.name, self.birthdate.isoformat(), self.nationality))
+            (self.coach_id, self.name, self.birthdate, self.nationality))
 
 
 class Award:
