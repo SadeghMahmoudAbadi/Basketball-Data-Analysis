@@ -2,6 +2,8 @@ import asyncio
 import re
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
+from models import PlayerStats
+import sqlite3
 
 BASE_URL = "https://www.basketball-reference.com"
 
@@ -12,44 +14,8 @@ BROWSER_CONFIGS = {
     "extra_http_headers": {"Accept-Language": "en-US,en;q=0.9"}
 }
 
-class PlayerStats:
-    def __init__(self, season_id: int, player_id: str, team_id: str, g: int, gs: int,
-                 mp: int, fg: int, fga: int, fg_pct: float, three_p: int, three_pa: int,
-                 three_p_pct: float, two_p: int, two_pa: int, two_p_pct: float,
-                 efg_pct: float, ft: int, fta: int, ft_pct: float, orb: int, drb: int,
-                 trb: int, ast: int, stl: int, blk: int, tov: int, pf: int, pts: int,
-                 trp_dbl: int, ws: float, xp: str) -> None:
-        self.season_id = season_id
-        self.player_id = player_id
-        self.team_id = team_id
-        self.g = g
-        self.gs = gs
-        self.mp = mp
-        self.fg = fg
-        self.fga = fga
-        self.fg_pct = fg_pct
-        self.three_p = three_p
-        self.three_pa = three_pa
-        self.three_p_pct = three_p_pct
-        self.two_p = two_p
-        self.two_pa = two_pa
-        self.two_p_pct = two_p_pct
-        self.efg_pct = efg_pct
-        self.ft = ft
-        self.fta = fta
-        self.ft_pct = ft_pct
-        self.orb = orb
-        self.drb = drb
-        self.trb = trb
-        self.ast = ast
-        self.stl = stl
-        self.blk = blk
-        self.tov = tov
-        self.pf = pf
-        self.pts = pts
-        self.trp_dbl = trp_dbl
-        self.ws = ws
-        self.xp = 0 if xp == 'R' or not xp else int(xp)
+DATABASE = "basketball_reference.db"
+
 
 def log(message):
     print(f"[Players Scraper] {message}", flush=True)
@@ -231,6 +197,21 @@ async def scrape_player_totals(page, player_href, player_xp, target_years):
         
     return player_stats_list
 
+def insert_data(player_stats: list[PlayerStats]) -> None:
+    """Insert player stats into database"""
+    try:
+        # Connect to SQLite database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        # Insert player stats into database
+        for stat in player_stats:
+            stat.insert_player_stats(cursor)
+        # Commit changes and close connection
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log(f"خطا در وارد کردن دیتا به دیتابیس: {e}")
+
 async def main():
     target_years = get_target_seasons()
     player_registry = {}  
@@ -269,10 +250,11 @@ async def main():
             all_extracted_stats.extend(stats_list)
             
             await asyncio.sleep(1.5) 
-
         await context.close()
         await browser.close()
+    
 
+    insert_data(all_extracted_stats)
     log(f"\n در مجموع {len(all_extracted_stats)} رکورد استخراج شد.")
 
 if __name__ == "__main__":
