@@ -1,5 +1,7 @@
 import asyncio
+import os
 import re
+import sqlite3
 from playwright.async_api import async_playwright
 
 BASE_URL = "https://www.basketball-reference.com"
@@ -174,6 +176,7 @@ async def scrape_season(page, season_name, year):
     print(f"{season_name}: {len(season_stats)} teams")
     return season_stats
 
+
 async def main():
     all_stats = []
     async with async_playwright() as p:
@@ -185,6 +188,44 @@ async def main():
             all_stats += await scrape_season(page, season_name, year)
 
         await browser.close()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, "basketball.db")
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # ساخت جدول team_stats
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS team_stats (
+            season_id INTEGER,
+            team_id TEXT,
+            wins INTEGER,
+            losses INTEGER,
+            win_loss_percent REAL,
+            finish_rank INTEGER,
+            playoff_result TEXT,
+            offensive_rating REAL,
+            defensive_rating REAL,
+            net_rating REAL,
+            pace REAL,
+            PRIMARY KEY (season_id, team_id)
+        )
+    """)
+
+    # درج داده‌ها
+    for row in all_stats:
+        cursor.execute("""
+            INSERT OR REPLACE INTO team_stats VALUES (
+                :season_id, :team_id, :wins, :losses, :win_loss_percent,
+                :finish_rank, :playoff_result, :offensive_rating,
+                :defensive_rating, :net_rating, :pace
+            )
+        """, row)
+
+    conn.commit()
+    conn.close()
+    print(f"تعداد {len(all_stats)} رکورد تیم با موفقیت در basketball.db ذخیره شد!")
 
     return all_stats
 

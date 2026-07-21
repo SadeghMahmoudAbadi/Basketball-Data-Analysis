@@ -1,6 +1,8 @@
 import asyncio
 import re
 from playwright.async_api import async_playwright
+import os
+import sqlite3
 
 BASE_URL = "https://www.basketball-reference.com"
 BROWSER_CONFIGS = {
@@ -156,6 +158,35 @@ async def main():
 
         await browser.close()
         
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    db_path = os.path.join(script_dir, "basketball.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+   
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS seasons (
+            season_id INTEGER PRIMARY KEY,
+            season_name TEXT,
+            champion_id TEXT,
+            runner_up_id TEXT,
+            league_avg_pts REAL,
+            mvp_player_id TEXT,
+            finals_mvp_player_id TEXT
+        )
+    """)
+
+    for row in all_seasons:
+        cursor.execute("""
+            INSERT OR REPLACE INTO seasons VALUES (
+                :season_id, :season_name, :champion_id, :runner_up_id, 
+                :league_avg_pts, :mvp_player_id, :finals_mvp_player_id
+            )
+        """, row)
+        
+    conn.commit()
+    conn.close()
+    print("داده‌ها با موفقیت در basketball.db ذخیره شدند!")
     return all_seasons
 
 
