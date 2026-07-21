@@ -86,7 +86,7 @@ def insert_data(awards: list[Award], award_season_list: list[AwardSeason]) -> No
         log(f"خطا در وارد کردن دیتا به دیتابیس: {e}")
 
 async def main():
-    awards, award_seasons = await scrape_nba_awards_data(2019, 2024)
+    awards, award_seasons = await scrape_nba_awards_data(1956, 2018)
     insert_data(awards, award_seasons)
     log(f"\n==================== پایان عملیات جوایز ====================")
     log(f"تعداد کل انواع جوایز تعریف شده: {len(awards)}")
